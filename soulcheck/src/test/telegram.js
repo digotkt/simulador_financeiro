@@ -4,6 +4,7 @@ const config = require('./config');
 const api = axios.create({
   baseURL: `https://api.telegram.org/bot${config.telegram.token}`,
   headers: { 'Content-Type': 'application/json' },
+  proxy: false,
 });
 
 async function sendText(chatId, message) {

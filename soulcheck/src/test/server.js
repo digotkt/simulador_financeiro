@@ -91,6 +91,7 @@ async function pollUpdates() {
       const res = await axios.get(`${baseUrl}/getUpdates`, {
         params: { offset: pollingOffset, timeout: 30 },
         timeout: 35000,
+        proxy: false,
       });
 
       const updates = res.data.result || [];
