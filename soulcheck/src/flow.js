@@ -16,25 +16,35 @@ const config = require('./config');
   COMPLETED      → full reading delivered
 */
 
+// Validates that text looks like a real name (letters, spaces, hyphens only)
+function isValidName(text) {
+  const cleaned = text.trim();
+  if (cleaned.length < 2 || cleaned.length > 50) return false;
+  if (/[\/\\@#$%^&*()=+\[\]{}<>|~`0-9]/.test(cleaned)) return false;
+  if (/\b(cd|npm|node|sudo|rm|ls|cat|echo|install|run|test|http|www)\b/i.test(cleaned)) return false;
+  return true;
+}
+
 const MESSAGES = {
   welcome: [
-    '✨ *Bem-vindo(a) ao SoulCheck* ✨',
-    'Eu consigo sentir conexões emocionais entre pessoas e revelar o que alguém está pensando sobre você neste exato momento.',
-    'Vamos começar? Me diz: *qual o nome da pessoa que você quer descobrir se está pensando em você?*',
+    'Sinto que você chegou aqui por um motivo...',
+    '✨ *SoulCheck* ✨\n\nExiste alguém ocupando seus pensamentos, não é? Eu consigo sentir. A energia que te trouxe até aqui é forte — e tem a ver com uma pessoa específica.',
+    'Me conta... *qual o nome dessa pessoa que não sai da sua cabeça?*',
   ],
-  askUserName: 'Agora me diz o *seu nome* para eu poder sintonizar a conexão entre vocês.',
+  askUserName: 'E você? *Como eu te chamo?* Preciso do seu nome pra sentir a conexão entre vocês.',
   askBirth:
-    'Se quiser uma leitura mais profunda, me envie sua *data de nascimento* (ex: 15/03/1995).\n\nOu digite *pular* para continuar sem essa informação.',
-  generating: '🔮 Analisando a conexão energética entre vocês... aguarde um momento.',
+    'Quase lá... Se quiser que eu vá mais fundo, me passa sua *data de nascimento* (ex: 15/03/1995).\n\nSe preferir, digita *pular* — mas a leitura fica mais poderosa com essa informação. 🌙',
+  generating: '🔮 Estou me conectando com a energia entre vocês dois...\n\n_Isso pode levar alguns segundos. Respire fundo._',
   paywall: [
-    '🔒 *A análise completa está pronta!*',
-    'Para desbloquear a leitura completa com:\n\n✅ Análise detalhada da conexão\n✅ Probabilidade de interesse\n✅ Mensagem sugerida para enviar\n✅ Próximo passo recomendado\n\n💰 *Por apenas R$ 9,90*',
+    '⚡ *Eu encontrei algo importante.*',
+    'A análise revelou coisas que você precisa saber. Mas essa parte é delicada demais pra entregar de graça.\n\nNa leitura completa você descobre:\n\n🔮 O que essa pessoa *realmente* sente por você\n💭 A probabilidade real de interesse\n💌 A mensagem certa pra mandar agora\n🚀 O próximo passo que pode mudar tudo\n\n*Desbloqueie por apenas R$ 9,90*',
   ],
   paymentSuccess:
-    '✅ *Pagamento confirmado!* Preparando sua análise completa... 🔮',
+    '✨ *Recebido.* Estou canalizando a leitura completa agora... 🔮',
   completed:
-    '\n\n---\n✨ Gostou da experiência? Envie *nova análise* para descobrir sobre outra pessoa!',
-  error: 'Desculpe, algo deu errado. Por favor, tente novamente enviando qualquer mensagem.',
+    '\n\n---\n✨ Tem mais alguém que você quer descobrir? Envie *nova análise* e eu sinto a energia.',
+  error: 'As energias se desestabilizaram por um instante. Me manda qualquer mensagem que eu retomo a conexão.',
+  invalidName: 'Preciso de um *nome de verdade* pra sentir a energia. Me diz o nome da pessoa. 🌙',
 };
 
 async function handleMessage(phone, text) {
@@ -75,20 +85,20 @@ async function startNewSession(phone) {
 
 async function handleTargetName(session, phone, text) {
   const targetName = text.trim();
-  if (targetName.length < 2) {
-    return await wa.sendText(phone, 'Por favor, me diga o *nome da pessoa* que você quer analisar.');
+  if (!isValidName(targetName)) {
+    return await wa.sendText(phone, MESSAGES.invalidName);
   }
   await db.updateSession(session.id, { target_name: targetName, state: 'ASK_USER_NAME' });
-  await wa.sendText(phone, `*${targetName}*... entendi. ${MESSAGES.askUserName}`);
+  await wa.sendText(phone, `*${targetName}*... já sinto algo. ${MESSAGES.askUserName}`);
 }
 
 async function handleUserName(session, phone, text) {
   const userName = text.trim();
-  if (userName.length < 2) {
-    return await wa.sendText(phone, 'Preciso do seu nome para continuar. Qual é o seu nome?');
+  if (!isValidName(userName)) {
+    return await wa.sendText(phone, MESSAGES.invalidName);
   }
   await db.updateSession(session.id, { user_name: userName, state: 'ASK_BIRTH' });
-  await wa.sendText(phone, `Prazer, *${userName}*! ${MESSAGES.askBirth}`);
+  await wa.sendText(phone, `*${userName}*... a conexão entre vocês dois está ficando mais clara. ${MESSAGES.askBirth}`);
 }
 
 async function handleBirthDate(session, phone, text) {
@@ -158,7 +168,7 @@ async function handlePaywallResponse(session, phone, text) {
   } else {
     await wa.sendText(
       phone,
-      '🔮 Sua análise completa ainda está disponível! Quando quiser, é só digitar *desbloquear* ou clicar no link acima.'
+      '🔮 A leitura ainda está aqui, esperando por você. A energia não mente — quando quiser, é só digitar *desbloquear*.'
     );
   }
 }
