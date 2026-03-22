@@ -8,8 +8,8 @@ module.exports = {
     token: process.env.TELEGRAM_BOT_TOKEN,
   },
 
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY,
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
   },
 
   payment: {

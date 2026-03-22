@@ -1,7 +1,7 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const config = require('./config');
 
-const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
+const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
 const SYSTEM_PROMPT = `Você é o SoulCheck, um oráculo digital moderno especializado em conexões emocionais e energéticas entre pessoas.
 
@@ -21,11 +21,10 @@ async function generatePartialReading(userName, targetName, birthDate) {
     ? `O usuário se chama ${userName}, nascido em ${birthDate}, e quer saber sobre ${targetName}.`
     : `O usuário se chama ${userName} e quer saber sobre ${targetName}.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 400,
-    system: SYSTEM_PROMPT,
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
       {
         role: 'user',
         content: `${userContext}
@@ -39,9 +38,11 @@ Gere uma leitura PARCIAL sobre a conexão entre essas duas pessoas. A leitura de
 A leitura deve ser envolvente o suficiente para que a pessoa queira desesperadamente ver a versão completa. Use no máximo 3 parágrafos curtos.`,
       },
     ],
+    temperature: 0.9,
+    max_tokens: 400,
   });
 
-  return response.content[0].text;
+  return response.choices[0].message.content;
 }
 
 async function generateFullReading(userName, targetName, birthDate, partialReading) {
@@ -49,11 +50,10 @@ async function generateFullReading(userName, targetName, birthDate, partialReadi
     ? `O usuário se chama ${userName}, nascido em ${birthDate}, e quer saber sobre ${targetName}.`
     : `O usuário se chama ${userName} e quer saber sobre ${targetName}.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
       {
         role: 'user',
         content: `${userContext}
@@ -72,9 +72,11 @@ Agora gere a ANÁLISE COMPLETA premium. Inclua:
 Seja detalhado, emocional e envolvente. Use formatação com emojis para separar seções. Máximo 6 parágrafos.`,
       },
     ],
+    temperature: 0.9,
+    max_tokens: 800,
   });
 
-  return response.content[0].text;
+  return response.choices[0].message.content;
 }
 
 module.exports = {
