@@ -1,10 +1,16 @@
 const axios = require('axios');
+const HttpsProxyAgent = require('https-proxy-agent');
 const config = require('./config');
+
+const httpsAgent = process.env.HTTPS_PROXY
+  ? new HttpsProxyAgent(process.env.HTTPS_PROXY)
+  : undefined;
 
 const api = axios.create({
   baseURL: `https://api.telegram.org/bot${config.telegram.token}`,
   headers: { 'Content-Type': 'application/json' },
   proxy: false,
+  httpsAgent,
 });
 
 async function sendText(chatId, message) {

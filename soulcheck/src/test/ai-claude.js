@@ -1,7 +1,15 @@
 const OpenAI = require('openai');
+const HttpsProxyAgent = require('https-proxy-agent');
 const config = require('./config');
 
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
+const httpAgent = process.env.HTTPS_PROXY
+  ? new HttpsProxyAgent(process.env.HTTPS_PROXY)
+  : undefined;
+
+const openai = new OpenAI({
+  apiKey: config.openai.apiKey,
+  httpAgent,
+});
 
 const SYSTEM_PROMPT = `Você é o SoulCheck, um oráculo digital moderno especializado em conexões emocionais e energéticas entre pessoas.
 

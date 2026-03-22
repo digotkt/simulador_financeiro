@@ -84,6 +84,10 @@ async function pollUpdates() {
   console.log('[Polling] Starting Telegram polling mode...');
 
   const axios = require('axios');
+  const HttpsProxyAgent = require('https-proxy-agent');
+  const httpsAgent = process.env.HTTPS_PROXY
+    ? new HttpsProxyAgent(process.env.HTTPS_PROXY)
+    : undefined;
   const baseUrl = `https://api.telegram.org/bot${config.telegram.token}`;
 
   while (pollingActive) {
@@ -92,6 +96,7 @@ async function pollUpdates() {
         params: { offset: pollingOffset, timeout: 30 },
         timeout: 35000,
         proxy: false,
+        httpsAgent,
       });
 
       const updates = res.data.result || [];
