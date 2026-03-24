@@ -130,11 +130,126 @@ app.get('/payment/cancel', (req, res) => {
   `);
 });
 
+// Dashboard - métricas em tempo real
+app.get('/dashboard', (req, res) => {
+  const analytics = require('./analytics');
+  const data = analytics.getDashboard();
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>SoulCheck - Dashboard</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: linear-gradient(135deg, #1a0533 0%, #0d001a 100%);
+          color: white; min-height: 100vh; padding: 2rem;
+        }
+        h1 { text-align: center; margin-bottom: 2rem; font-size: 1.8rem; }
+        .grid {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem; max-width: 900px; margin: 0 auto 2rem;
+        }
+        .card {
+          background: rgba(255,255,255,0.08); border-radius: 12px;
+          padding: 1.2rem; text-align: center;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card .value { font-size: 2rem; font-weight: bold; color: #a78bfa; }
+        .card .label { font-size: 0.85rem; opacity: 0.7; margin-top: 0.3rem; }
+        .section { max-width: 900px; margin: 0 auto 1.5rem; }
+        .section h2 { font-size: 1.2rem; margin-bottom: 0.8rem; opacity: 0.9; }
+        .events {
+          background: rgba(255,255,255,0.05); border-radius: 8px;
+          padding: 1rem; font-family: monospace; font-size: 0.8rem;
+          max-height: 300px; overflow-y: auto; line-height: 1.6;
+        }
+        .bar { display: flex; align-items: center; margin: 0.3rem 0; }
+        .bar-label { width: 120px; font-size: 0.85rem; }
+        .bar-fill { height: 20px; background: #a78bfa; border-radius: 4px; min-width: 2px; }
+        .bar-value { margin-left: 0.5rem; font-size: 0.8rem; opacity: 0.7; }
+        .refresh { text-align: center; margin-top: 1rem; opacity: 0.5; font-size: 0.8rem; }
+      </style>
+      <meta http-equiv="refresh" content="30">
+    </head>
+    <body>
+      <h1>SoulCheck Dashboard</h1>
+      <div class="grid">
+        <div class="card">
+          <div class="value">${data.totalSessions}</div>
+          <div class="label">Sessoes</div>
+        </div>
+        <div class="card">
+          <div class="value">${data.onboardingRate}</div>
+          <div class="label">Taxa Onboarding</div>
+        </div>
+        <div class="card">
+          <div class="value">${data.reachedPaywall}</div>
+          <div class="label">Chegaram no Paywall</div>
+        </div>
+        <div class="card">
+          <div class="value">${data.converted}</div>
+          <div class="label">Convertidos</div>
+        </div>
+        <div class="card">
+          <div class="value">${data.conversionRate}</div>
+          <div class="label">Taxa Conversao</div>
+        </div>
+        <div class="card">
+          <div class="value">${data.totalRevenue}</div>
+          <div class="label">Receita Total</div>
+        </div>
+      </div>
+
+      ${Object.keys(data.dropoffByState).length > 0 ? `
+      <div class="section">
+        <h2>Desistencias por Etapa</h2>
+        ${Object.entries(data.dropoffByState).map(([state, count]) => {
+          const max = Math.max(...Object.values(data.dropoffByState));
+          const width = Math.round((count / max) * 100);
+          return `<div class="bar">
+            <span class="bar-label">${state}</span>
+            <div class="bar-fill" style="width: ${width}%"></div>
+            <span class="bar-value">${count}</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+      <div class="section">
+        <h2>Eventos Recentes</h2>
+        <div class="events">
+          ${data.recentEvents.length > 0
+            ? data.recentEvents.map(e => `<div>${e}</div>`).join('')
+            : '<div style="opacity:0.5">Nenhum evento ainda...</div>'}
+        </div>
+      </div>
+
+      <div class="refresh">Atualiza automaticamente a cada 30s</div>
+    </body>
+    </html>
+  `);
+});
+
+// Dashboard API (JSON)
+app.get('/api/dashboard', (req, res) => {
+  const analytics = require('./analytics');
+  res.json(analytics.getDashboard());
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'soulcheck-mvp' });
 });
 
-app.listen(config.port, () => {
-  console.log(`[SoulCheck] Server running on port ${config.port}`);
-});
+// Start server only when running directly (not on Vercel)
+if (require.main === module) {
+  app.listen(config.port, () => {
+    console.log(`[SoulCheck] Server running on port ${config.port}`);
+  });
+}
+
+module.exports = app;
