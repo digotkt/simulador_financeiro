@@ -13,7 +13,26 @@ const api = axios.create({
   httpsAgent,
 });
 
+async function sendTyping(chatId) {
+  try {
+    await api.post('/sendChatAction', { chat_id: chatId, action: 'typing' });
+  } catch (err) {
+    // non-critical, ignore
+  }
+}
+
+// Simulates human typing speed: ~40-60 chars/sec + random jitter
+function typingDelay(text) {
+  const baseMs = Math.min(text.length * 25, 4000); // cap at 4s
+  const jitter = Math.random() * 800 + 400; // 400-1200ms random
+  return baseMs + jitter;
+}
+
 async function sendText(chatId, message) {
+  // Show typing indicator + wait proportional to message length
+  await sendTyping(chatId);
+  await new Promise((resolve) => setTimeout(resolve, typingDelay(message)));
+
   try {
     await api.post('/sendMessage', {
       chat_id: chatId,
@@ -33,10 +52,11 @@ async function sendText(chatId, message) {
   }
 }
 
-async function sendWithDelay(chatId, messages, delayMs = 1000) {
+async function sendWithDelay(chatId, messages) {
   for (const msg of messages) {
     await sendText(chatId, msg);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    // Extra pause between sequential messages (1.5-3s)
+    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1500));
   }
 }
 
