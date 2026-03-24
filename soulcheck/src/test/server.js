@@ -3,6 +3,7 @@ const config = require('./config');
 const tg = require('./telegram');
 const flow = require('./flow-telegram');
 const db = require('./db-memory');
+const analytics = require('../analytics');
 
 const app = express();
 app.use(express.json());
@@ -46,6 +47,21 @@ app.post('/webhook/telegram', async (req, res) => {
 // Debug endpoint - view in-memory data
 app.get('/debug', (req, res) => {
   res.json(db.debugDump());
+});
+
+// Analytics dashboard - metricas de conversao e performance
+app.get('/dashboard', (req, res) => {
+  res.json(analytics.getDashboard());
+});
+
+// Export analytics data to JSON file
+app.post('/dashboard/export', (req, res) => {
+  try {
+    const filePath = analytics.exportData();
+    res.json({ ok: true, file: filePath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Health check

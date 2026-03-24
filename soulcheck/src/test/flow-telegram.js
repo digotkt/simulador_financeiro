@@ -2,6 +2,8 @@ const db = require('./db-memory');
 const tg = require('./telegram');
 const ai = require('./ai-claude');
 const config = require('./config');
+const analytics = require('../analytics');
+const kb = require('../knowledge-base');
 
 /*
   States:
@@ -43,7 +45,7 @@ function wantsToPay(text) {
 const MESSAGES = {
   welcome: [
     [
-      'Sinto que voce chegou aqui por um motivo...',
+      'sinto que voce chegou aqui por um motivo...',
       '✨ SoulCheck ✨\n\ntem alguem ocupando seus pensamentos ne? eu consigo sentir. a energia que te trouxe ate aqui e forte, e tem a ver com uma pessoa especifica.',
       'me conta... qual o nome dessa pessoa que nao sai da sua cabeca?',
     ],
@@ -124,6 +126,9 @@ async function handleMessage(chatId, text) {
       return await startNewSession(chatId);
     }
 
+    // Track user message with response time
+    analytics.trackMessage(session.id, text, session.state);
+
     switch (session.state) {
       case 'WELCOME':
       case 'ASK_TARGET':
@@ -153,10 +158,12 @@ async function handleCallbackQuery(chatId, data, callbackQueryId) {
 }
 
 async function startNewSession(chatId) {
-  db.createSession(chatId);
+  const session = db.createSession(chatId);
+  analytics.track(session.id, 'session_start', { chatId });
+
   await tg.sendWithDelay(chatId, pick(MESSAGES.welcome));
-  const session = db.getActiveSession(chatId);
-  db.updateSession(session.id, { state: 'ASK_TARGET' });
+  const activeSession = db.getActiveSession(chatId);
+  db.updateSession(activeSession.id, { state: 'ASK_TARGET' });
 }
 
 async function handleTargetName(session, chatId, text) {
@@ -165,6 +172,8 @@ async function handleTargetName(session, chatId, text) {
     return await tg.sendText(chatId, pick(MESSAGES.invalidName));
   }
   db.updateSession(session.id, { target_name: targetName, state: 'ASK_USER_NAME' });
+  analytics.track(session.id, 'target_name_provided', { targetName });
+
   const reaction = pick(MESSAGES.targetReaction).replace('{name}', targetName);
   await tg.sendText(chatId, reaction);
   await tg.sendText(chatId, pick(MESSAGES.askUserName));
@@ -176,6 +185,8 @@ async function handleUserName(session, chatId, text) {
     return await tg.sendText(chatId, pick(MESSAGES.invalidName));
   }
   db.updateSession(session.id, { user_name: userName, state: 'ASK_BIRTH' });
+  analytics.track(session.id, 'user_name_provided', { userName });
+
   const reaction = pick(MESSAGES.userReaction).replace('{name}', userName);
   await tg.sendText(chatId, reaction);
   await tg.sendText(chatId, pick(MESSAGES.askBirth));
@@ -189,18 +200,33 @@ async function handleBirthDate(session, chatId, text) {
     state: 'GENERATING',
   });
 
+  analytics.track(session.id, 'onboarding_complete', {
+    hasBirthDate: !!birthDate,
+    userName: session.user_name,
+    targetName: session.target_name,
+  });
+
   await tg.sendText(chatId, pick(MESSAGES.generating));
 
-  // Generate partial reading
+  // Build conversation context for AI
+  const userMessages = analytics.getUserMessages(session.id);
+  const conversationContext = { userMessages };
+
+  // Generate partial reading with context
   const partialReading = await ai.generatePartialReading(
     session.user_name,
     session.target_name,
-    birthDate
+    birthDate,
+    conversationContext
   );
 
   db.updateSession(session.id, {
     partial_response: partialReading,
     state: 'PAYWALL',
+  });
+
+  analytics.track(session.id, 'paywall_reached', {
+    partialReadingLength: partialReading.length,
   });
 
   // Send partial reading
@@ -250,6 +276,11 @@ async function simulatePayment(chatId, sessionId) {
     return await tg.sendText(chatId, pick(MESSAGES.error));
   }
 
+  analytics.track(sessionId, 'payment_completed', {
+    amount: config.payment.amount,
+    partialReading: updatedSession.partial_response,
+  });
+
   await deliverFullReading(updatedSession);
 }
 
@@ -257,16 +288,25 @@ async function deliverFullReading(session) {
   const chatId = session.chat_id;
   await tg.sendText(chatId, pick(MESSAGES.paymentSuccess));
 
+  // Build conversation context for AI
+  const userMessages = analytics.getUserMessages(session.id);
+  const conversationContext = { userMessages };
+
   const fullReading = await ai.generateFullReading(
     session.user_name,
     session.target_name,
     session.birth_date,
-    session.partial_response
+    session.partial_response,
+    conversationContext
   );
 
   db.updateSession(session.id, {
     full_response: fullReading,
     state: 'COMPLETED',
+  });
+
+  analytics.track(session.id, 'full_reading_delivered', {
+    readingLength: fullReading.length,
   });
 
   await tg.sendText(chatId, fullReading);

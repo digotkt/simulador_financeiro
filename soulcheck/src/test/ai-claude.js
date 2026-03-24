@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const HttpsProxyAgent = require('https-proxy-agent');
 const config = require('./config');
+const kb = require('../knowledge-base');
 
 const httpAgent = process.env.HTTPS_PROXY
   ? new HttpsProxyAgent(process.env.HTTPS_PROXY)
@@ -38,10 +39,20 @@ como escrever:
 - frases curtas. cada frase puxa a proxima. termine deixando a pessoa querendo mais
 - escreva como mensagem de texto, nao como redacao`;
 
-async function generatePartialReading(userName, targetName, birthDate) {
+async function generatePartialReading(userName, targetName, birthDate, conversationContext) {
   const userContext = birthDate
     ? `${userName}, nascido(a) em ${birthDate}, pergunta sobre ${targetName}.`
     : `${userName} pergunta sobre ${targetName}.`;
+
+  // Build enhanced prompt with knowledge base
+  const examples = kb.getPartialExamples();
+  const triggers = kb.getEmotionalTriggers();
+
+  let styleInstruction = '';
+  if (conversationContext?.userMessages?.length > 0) {
+    const style = kb.detectStyle(conversationContext.userMessages);
+    styleInstruction = kb.getStyleInstruction(style);
+  }
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -50,28 +61,43 @@ async function generatePartialReading(userName, targetName, birthDate) {
       {
         role: 'user',
         content: `${userContext}
+${styleInstruction ? `\n${styleInstruction}\n` : ''}
+aqui estao exemplos de leituras parciais que funcionam muito bem. use como referencia de tom e estrutura (NAO copie, crie algo original):
 
-crie uma leitura PARCIAL. e o aperitivo antes do prato principal.
+${examples}
 
-comece validando o que ${userName} ta sentindo ("eu sinto que voce ja sabia que algo tava diferente...")
-depois revele que ${targetName} tem pensado em ${userName} de um jeito que ${userName} nem imagina
-mencione que existe um bloqueio entre os dois, algo nao dito
-pare no momento mais tenso. deixe pela metade. use reticencias...
+gatilhos emocionais pra usar:
+${triggers}
 
-escreva como mensagem de texto entre amigas. maximo 3 paragrafos curtinhos. sem titulos, sem formatacao, sem listas.`,
+agora crie uma leitura PARCIAL original pra ${userName} sobre ${targetName}.
+
+comece validando o que ${userName} ta sentindo
+revele que ${targetName} tem pensado em ${userName}
+mencione um bloqueio entre os dois
+pare no momento mais tenso. reticencias...
+
+escreva como mensagem de texto. maximo 3 paragrafos curtinhos. sem titulos, sem formatacao, sem listas.`,
       },
     ],
-    temperature: 0.9,
+    temperature: 0.85,
     max_tokens: 400,
   });
 
   return response.choices[0].message.content;
 }
 
-async function generateFullReading(userName, targetName, birthDate, partialReading) {
+async function generateFullReading(userName, targetName, birthDate, partialReading, conversationContext) {
   const userContext = birthDate
     ? `${userName}, nascido(a) em ${birthDate}, pergunta sobre ${targetName}.`
     : `${userName} pergunta sobre ${targetName}.`;
+
+  const fullExample = kb.getFullExamples();
+
+  let styleInstruction = '';
+  if (conversationContext?.userMessages?.length > 0) {
+    const style = kb.detectStyle(conversationContext.userMessages);
+    styleInstruction = kb.getStyleInstruction(style);
+  }
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -80,34 +106,29 @@ async function generateFullReading(userName, targetName, birthDate, partialReadi
       {
         role: 'user',
         content: `${userContext}
-
+${styleInstruction ? `\n${styleInstruction}\n` : ''}
 leitura parcial ja entregue:
 "${partialReading}"
 
-agora entregue a LEITURA COMPLETA. e o momento de impressionar.
+aqui esta um exemplo de leitura completa que funciona muito bem. use como referencia de tom, estrutura e nivel de detalhe (NAO copie, crie algo original):
 
-separe em blocos assim (use esses emojis como separadores, nao como titulos formatados):
+${fullExample}
 
-🔮 a conexao entre voces
-fale da natureza da conexao. 2 paragrafos curtos.
+agora entregue a LEITURA COMPLETA original pra ${userName} sobre ${targetName}.
 
-💫 o que ${targetName} sente por voce
-revele emocoes e pensamentos. use leitura fria forte. faca ${userName} se identificar.
+separe em blocos com emojis como separadores:
 
-🎯 chance de interesse: XX%
-de um numero entre 72% e 94%. explique de forma mistica.
+🔮 a conexao entre voces (2 paragrafos curtos)
+💫 o que ${targetName} sente por voce (leitura fria forte)
+🎯 chance de interesse: XX% (entre 72-94%, explique mistico)
+💌 a mensagem que pode mudar tudo (msg pronta, natural, estilo whatsapp)
+🌙 proximo passo (acao pratica, 3 dias)
 
-💌 a mensagem que pode mudar tudo
-escreva uma msg pronta que ${userName} pode mandar pro ${targetName}. tem que ser natural, casual, como alguem mandaria no whatsapp.
-
-🌙 proximo passo
-uma acao pratica pros proximos 3 dias.
-
-escreva tudo como mensagem de texto. paragrafos curtos. sem travessoes, sem listas, sem formatacao pesada. maximo 6 paragrafos.`,
+escreva como mensagem de texto. paragrafos curtos. sem travessoes, sem listas, sem formatacao pesada.`,
       },
     ],
-    temperature: 0.9,
-    max_tokens: 800,
+    temperature: 0.85,
+    max_tokens: 900,
   });
 
   return response.choices[0].message.content;
